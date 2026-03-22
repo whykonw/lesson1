@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>我的课表</title>
+<style>
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.7} }
+  @keyframes slideIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{margin:0;background:#F0F4FF;font-family:'PingFang SC','Noto Sans SC',-apple-system,'Helvetica Neue',sans-serif}
+  ::-webkit-scrollbar{display:none}
+
+  .app{min-height:100vh;background:linear-gradient(180deg,#F0F4FF 0%,#FAFBFF 40%,#F8F9FC 100%);max-width:480px;margin:0 auto;padding-bottom:40px}
+
+  .header{background:linear-gradient(135deg,#4F46E5 0%,#7C3AED 50%,#6D28D9 100%);padding:44px 24px 28px;border-radius:0 0 28px 28px;color:#fff;position:relative;overflow:hidden}
+  .header .circle1{position:absolute;top:-30px;right:-30px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.08)}
+  .header .circle2{position:absolute;bottom:-20px;left:40px;width:80px;height:80px;border-radius:50%;background:rgba(255,255,255,.05)}
+  .header .sub{font-size:13px;opacity:.85;margin-bottom:4px;font-weight:500}
+  .header .week{font-size:32px;font-weight:800;letter-spacing:-.5px}
+  .header .date{font-size:14px;opacity:.8;margin-top:4px}
+  .header .badge{margin-top:12px;font-size:13px;opacity:.75;background:rgba(255,255,255,.12);display:inline-block;padding:4px 14px;border-radius:20px}
+
+  .day-bar{display:flex;gap:6px;padding:18px 16px 8px;overflow-x:auto}
+  .day-btn{flex:1;min-width:48px;padding:10px 4px 8px;border:none;border-radius:14px;cursor:pointer;font-weight:700;font-size:14px;transition:all .25s ease;position:relative;font-family:inherit;background:#fff;color:#6B7280;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .day-btn.active{background:linear-gradient(135deg,#4F46E5,#7C3AED);color:#fff;box-shadow:0 4px 14px rgba(79,70,229,.3)}
+  .day-btn .count{font-size:10px;margin-top:2px;font-weight:600}
+  .day-btn.active .count{color:rgba(255,255,255,.8)}
+  .day-btn:not(.active) .count{color:#A5B4FC}
+  .day-btn .empty{font-size:10px;margin-top:2px;color:#D1D5DB}
+  .day-btn.active .empty{color:rgba(255,255,255,.5)}
+  .today-dot{position:absolute;top:4px;right:4px;width:6px;height:6px;border-radius:50%;background:#4F46E5}
+
+  .date-label{padding:8px 24px 4px;font-size:13px;color:#9CA3AF}
+  .course-list{padding:8px 16px}
+
+  .empty-state{text-align:center;padding:60px 20px;animation:slideIn .3s ease}
+  .empty-state .icon{font-size:48px;margin-bottom:12px}
+  .empty-state .title{font-size:18px;font-weight:700;color:#4B5563}
+  .empty-state .desc{font-size:13px;color:#9CA3AF;margin-top:6px}
+
+  .card{position:relative;background:#fff;border:1.5px solid #E5E7EB;border-radius:16px;padding:16px 18px;margin-bottom:12px;transition:all .3s ease;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+  .card.active{box-shadow:0 4px 20px var(--shadow)}
+  .card .status{position:absolute;top:12px;right:14px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:1px}
+  .card .status.live{background:var(--color);color:#fff;animation:pulse 2s infinite}
+  .card .status.soon{background:#FEF3C7;color:#D97706}
+  .card .inner{display:flex;align-items:flex-start;gap:14px}
+  .card .bar{width:4px;min-height:52px;border-radius:4px;flex-shrink:0;margin-top:2px}
+  .card .info{flex:1;min-width:0}
+  .card .name{font-size:17px;font-weight:700;color:#1F2937;margin-bottom:6px;line-height:1.3}
+  .card .meta{display:flex;flex-wrap:wrap;gap:6px 16px}
+  .card .meta span{font-size:13px;color:#6B7280;display:flex;align-items:center;gap:4px}
+  .card .tags{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px}
+  .card .tags span{font-size:12px;color:#9CA3AF}
+  .card .week-tag{font-size:11px;padding:1px 8px;border-radius:10px;font-weight:600}
+
+  .timeline{margin:8px 16px 0;padding:14px 18px;background:#fff;border-radius:16px;border:1px solid #E5E7EB}
+  .timeline .head{font-size:13px;font-weight:700;color:#6B7280;margin-bottom:8px}
+  .timeline .row{display:flex;align-items:center;gap:10px;font-size:13px;margin-bottom:6px}
+  .timeline .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+  .timeline .time{color:#9CA3AF;font-variant-numeric:tabular-nums;min-width:90px}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<script>
+const SEMESTER_START = new Date(2026, 2, 2);
+const SESSIONS = [
+  {label:"第一讲",period:"1-2节",start:"08:00",end:"09:35",tag:"上午"},
+  {label:"第二讲",period:"3-4节",start:"09:55",end:"11:30",tag:"上午"},
+  {label:"第三讲",period:"5-6节",start:"14:00",end:"15:35",tag:"下午"},
+  {label:"第四讲",period:"7-8节",start:"15:55",end:"17:30",tag:"下午"},
+  {label:"第五讲",period:"9-10节",start:"19:00",end:"20:35",tag:"晚上"},
+  {label:"第六讲",period:"11-12节",start:"20:45",end:"22:20",tag:"晚上"},
+];
+const COURSES = [
+  {day:1,session:4,name:"半导体物理",teacher:"张小伟",weeks:[1,12],room:"西72208",color:"#3B82F6"},
+  {day:1,session:5,name:"光电子材料及其应用",teacher:"郝艳/代云雅",weeks:[1,12],room:"西72402",color:"#8B5CF6"},
+  {day:2,session:3,name:"材料工厂设计概论",teacher:"曾敏",weeks:[4,15],room:"西72407",color:"#F59E0B"},
+  {day:3,session:1,name:"磁性物理",teacher:"代波/许方",weeks:[1,10],room:"西72211",color:"#EF4444"},
+  {day:3,session:3,name:"半导体物理",teacher:"张小伟",weeks:[1,12],room:"西72409",color:"#3B82F6"},
+  {day:4,session:1,name:"材料进展（双语）",teacher:"张文",weeks:[1,12],room:"西72207",color:"#10B981"},
+  {day:4,session:2,name:"磁性物理",teacher:"代波/许方",weeks:[1,10],room:"西72211",color:"#EF4444"},
+  {day:4,session:3,name:"形势与政策6",teacher:"陈奎儒",weeks:[9,12],room:"西4105",color:"#EC4899"},
+  {day:5,session:2,name:"篮球俱乐部4",teacher:"肖永红",weeks:[14,17],room:"西区羽毛球场",color:"#F97316"},
+  {day:5,session:4,name:"材料合成与制备技术A",teacher:"刘勋/沈金朋",weeks:[1,16],room:"西71401",color:"#06B6D4"},
+];
+const DAYS=["","周一","周二","周三","周四","周五","周六","周日"];
+const DAYS_FULL=["","星期一","星期二","星期三","星期四","星期五","星期六","星期日"];
+
+let selectedDay;
+let now = new Date();
+
+function getWeek(d){const a=new Date(d);a.setHours(0,0,0,0);const b=new Date(SEMESTER_START);b.setHours(0,0,0,0);return Math.floor((a-b)/(864e5*7))+1}
+function getDow(d){const v=d.getDay();return v===0?7:v}
+function mins(h,m){return h*60+m}
+function parseTime(s){return s.split(":").map(Number)}
+function isCurrent(s){const t=SESSIONS[s-1],[sh,sm]=parseTime(t.start),[eh,em]=parseTime(t.end);const m=mins(now.getHours(),now.getMinutes());return m>=mins(sh,sm)&&m<=mins(eh,em)}
+function isUpcoming(s){const t=SESSIONS[s-1],[sh,sm]=parseTime(t.start);const m=mins(now.getHours(),now.getMinutes());const st=mins(sh,sm);return st>m&&st-m<=60}
+
+function getDateForDay(week,day){const d=new Date(SEMESTER_START);d.setDate(d.getDate()+(week-1)*7+(day-1));return d}
+
+function render(){
+  now=new Date();
+  const cw=getWeek(now), todayDow=getDow(now);
+  if(selectedDay===undefined) selectedDay=todayDow;
+  const isToday=selectedDay===todayDow;
+  const selDate=getDateForDay(cw,selectedDay);
+
+  const weekCounts={};
+  for(let d=1;d<=7;d++) weekCounts[d]=COURSES.filter(c=>c.day===d&&cw>=c.weeks[0]&&cw<=c.weeks[1]).length;
+  const totalWeek=Object.values(weekCounts).reduce((a,b)=>a+b,0);
+
+  const todayCourses=COURSES.filter(c=>c.day===selectedDay&&cw>=c.weeks[0]&&cw<=c.weeks[1]).sort((a,b)=>a.session-b.session);
+
+  let html=`
+  <div class="header">
+    <div class="circle1"></div><div class="circle2"></div>
+    <div class="sub">西南科技大学 · 2025-2026 第二学期</div>
+    <div class="week">第 ${cw} 周</div>
+    <div class="date">${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,"0")}/${String(now.getDate()).padStart(2,"0")} ${DAYS_FULL[todayDow]} · ${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}</div>
+    <div class="badge">本周共 ${totalWeek} 节课</div>
+  </div>
+  <div class="day-bar">`;
+
+  for(let d=1;d<=7;d++){
+    const active=d===selectedDay;
+    const isTd=d===todayDow;
+    const cnt=weekCounts[d];
+    html+=`<button class="day-btn${active?" active":""}" onclick="selectDay(${d})">${DAYS[d]}`;
+    if(cnt>0) html+=`<div class="count">${cnt}节</div>`;
+    else html+=`<div class="empty">—</div>`;
+    if(isTd&&!active) html+=`<div class="today-dot"></div>`;
+    html+=`</button>`;
+  }
+  html+=`</div>`;
+
+  html+=`<div class="date-label">${selDate.getMonth()+1}月${selDate.getDate()}日${isToday?" · 今天":""}</div>`;
+  html+=`<div class="course-list">`;
+
+  if(todayCourses.length===0){
+    html+=`<div class="empty-state"><div class="icon">🎉</div><div class="title">${isToday?"今天没课，好好休息！":"这天没有课程"}</div><div class="desc">${selectedDay>=6?"周末快乐 ~":`第${cw}周${DAYS_FULL[selectedDay]}无课`}</div></div>`;
+  } else {
+    todayCourses.forEach((c,i)=>{
+      const t=SESSIONS[c.session-1];
+      const active=isToday&&isCurrent(c.session);
+      const soon=isToday&&isUpcoming(c.session)&&!active;
+      html+=`<div class="card${active?" active":""}" style="animation:slideIn .3s ease ${i*.06}s both;${active?`border-color:${c.color};background:linear-gradient(135deg,${c.color}18,${c.color}08);--shadow:${c.color}25;`:""}${soon?`border-color:${c.color}80;`:""}">`;
+      if(active) html+=`<div class="status live" style="background:${c.color}">上课中</div>`;
+      if(soon) html+=`<div class="status soon">即将开始</div>`;
+      html+=`<div class="inner"><div class="bar" style="background:linear-gradient(180deg,${c.color},${c.color}60)"></div><div class="info">
+        <div class="name">${c.name}</div>
+        <div class="meta"><span>🕐 ${t.start} - ${t.end}</span><span>📍 ${c.room}</span></div>
+        <div class="tags"><span>${c.teacher}</span><span>${t.label}（${t.period}）</span><span class="week-tag" style="color:${c.color};background:${c.color}15">${c.weeks[0]}-${c.weeks[1]}周</span></div>
+      </div></div></div>`;
+    });
+  }
+  html+=`</div>`;
+
+  if(isToday&&todayCourses.length>0){
+    html+=`<div class="timeline"><div class="head">📋 今日课程时间线</div>`;
+    todayCourses.forEach(c=>{
+      const t=SESSIONS[c.session-1];
+      const act=isCurrent(c.session);
+      html+=`<div class="row" style="opacity:${act?1:.7}"><span class="dot" style="background:${act?c.color:"#D1D5DB"};${act?`box-shadow:0 0 8px ${c.color}60`:""}"></span><span class="time">${t.start}-${t.end}</span><span style="color:${act?c.color:"#6B7280"};font-weight:${act?700:500}">${c.name}</span></div>`;
+    });
+    html+=`</div>`;
+  }
+
+  document.getElementById("app").innerHTML=html;
+}
+
+function selectDay(d){selectedDay=d;render()}
+
+render();
+setInterval(render,30000);
+</script>
+</body>
+</html>
